@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAPEMIG PDFs — Compilador de PDFs</title>
+    <meta name="description" content="Compile e organize seus PDFs com facilidade">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="4" y="2" width="24" height="32" rx="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                    <rect x="12" y="6" width="24" height="32" rx="3" stroke="currentColor" stroke-width="2" fill="rgba(139,92,246,0.15)"/>
+                    <path d="M18 18h12M18 23h12M18 28h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M28 6v8h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                </svg>
+                <h1>FAPEMIG <span class="logo-accent">PDFs</span></h1>
+            </div>
+            <p class="header-subtitle">Compilador de PDFs</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="layout">
+            <!-- Esquerda: Upload + Cards -->
+            <section class="content-area">
+                <!-- Zona de Upload -->
+                <div class="upload-zone" id="uploadZone">
+                    <svg class="upload-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="8" y="12" width="48" height="44" rx="6" stroke-dasharray="4 2" opacity="0.3"/>
+                        <path d="M32 42V22" stroke-width="2.5" stroke-linecap="round"/>
+                        <path d="M24 30l8-8 8 8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M20 42h24" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+                    </svg>
+                    <h2>Arraste seus PDFs aqui</h2>
+                    <p>ou clique para selecionar arquivos</p>
+                    <input type="file" id="fileInput" multiple accept=".pdf" hidden>
+                </div>
+
+                <!-- Estado Vazio -->
+                <div class="empty-state" id="emptyState">
+                    <svg class="empty-icon" viewBox="0 0 80 80" fill="none" stroke="currentColor" stroke-width="1">
+                        <rect x="16" y="8" width="32" height="44" rx="4" opacity="0.2"/>
+                        <rect x="24" y="16" width="32" height="44" rx="4" opacity="0.4"/>
+                        <rect x="32" y="24" width="32" height="44" rx="4" fill="rgba(139,92,246,0.05)" stroke-width="1.5"/>
+                        <line x1="40" y1="38" x2="56" y2="38" stroke-width="1.5" opacity="0.4"/>
+                        <line x1="40" y1="44" x2="56" y2="44" stroke-width="1.5" opacity="0.3"/>
+                        <line x1="40" y1="50" x2="52" y2="50" stroke-width="1.5" opacity="0.2"/>
+                    </svg>
+                    <p>Nenhum PDF adicionado ainda</p>
+                    <p class="empty-hint">Arraste arquivos ou clique na área acima</p>
+                </div>
+
+                <!-- Grid de PDFs -->
+                <div class="pdf-grid" id="pdfGrid" style="display:none"></div>
+
+                <!-- Informações dos arquivos -->
+                <div class="file-info" id="fileInfo" style="display:none">
+                    <span id="fileCount">0 arquivos</span>
+                    <span class="file-info-separator">•</span>
+                    <span id="totalPages">0 páginas</span>
+                </div>
+            </section>
+
+            <!-- Direita: Painel de Numeração -->
+            <aside class="settings-panel" id="settingsPanel">
+                <h2>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                    Numeração de Páginas
+                </h2>
+
+                <!-- Toggle -->
+                <div class="setting-group">
+                    <label class="toggle-label">
+                        <span>Ativar numeração</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="numberingToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </label>
+                </div>
+
+                <!-- Opções de Numeração -->
+                <div class="numbering-options" id="numberingOptions">
+                    <!-- Seletor de Posição -->
+                    <div class="setting-group">
+                        <label>Posição do número</label>
+                        <div class="position-selector">
+                            <div class="page-preview">
+                                <button data-position="top-left" title="Superior esquerdo"></button>
+                                <button data-position="top-center" title="Superior centro"></button>
+                                <button data-position="top-right" title="Superior direito"></button>
+                                <button data-position="middle-left" title="Meio esquerdo"></button>
+                                <button data-position="middle-center" title="Meio centro"></button>
+                                <button data-position="middle-right" title="Meio direito"></button>
+                                <button data-position="bottom-left" title="Inferior esquerdo"></button>
+                                <button data-position="bottom-center" title="Inferior centro" class="active"></button>
+                                <button data-position="bottom-right" title="Inferior direito"></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Formato -->
+                    <div class="setting-group">
+                        <label>Formato</label>
+                        <select id="numberFormat">
+                            <option value="number">1, 2, 3...</option>
+                            <option value="page_n">Página 1, Página 2...</option>
+                            <option value="n_of_total" selected>1 de 10, 2 de 10...</option>
+                            <option value="page_n_of_total">Página 1 de 10...</option>
+                        </select>
+                    </div>
+
+                    <!-- Tamanho da fonte -->
+                    <div class="setting-group">
+                        <label>Tamanho da fonte: <span id="fontSizeValue">12</span>pt</label>
+                        <input type="range" id="fontSize" min="8" max="20" value="12">
+                    </div>
+
+                    <!-- Cor -->
+                    <div class="setting-group">
+                        <label>Cor do número</label>
+                        <div class="color-pills">
+                            <button data-color="0,0,0" class="active">Preto</button>
+                            <button data-color="128,128,128">Cinza</button>
+                            <button data-color="255,255,255">Branco</button>
+                        </div>
+                    </div>
+
+                    <!-- Margem -->
+                    <div class="setting-group">
+                        <label>Margem: <span id="marginValue">30</span>px</label>
+                        <input type="range" id="margin" min="10" max="60" value="30">
+                    </div>
+
+                    <!-- Página Inicial -->
+                    <div class="setting-group">
+                        <label>Iniciar contagem na página</label>
+                        <input type="number" id="startPage" value="1" min="1">
+                    </div>
+
+                    <!-- Páginas Espelhadas -->
+                    <div class="setting-group">
+                        <label class="toggle-label">
+                            <span>Páginas espelhadas</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="facingPages">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </label>
+                        <p class="setting-hint">Espelha a posição em páginas pares para impressão frente e verso</p>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Botão Compilar -->
+        <div class="merge-section" id="mergeSection" style="display:none">
+            <button class="merge-button" id="mergeButton">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <path d="M9 15l3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="merge-text">Compilar PDFs</span>
+                <span class="merge-loader" style="display:none"></span>
+            </button>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <svg class="footer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                    <path d="M8 21h8M12 17v4"/>
+                    <circle cx="12" cy="10" r="3" opacity="0.5"/>
+                </svg>
+                <div>
+                    <p class="footer-title">Desenvolvido por <strong>DTI</strong></p>
+                    <p class="footer-subtitle">Departamento de Tecnologia da Informação e Comunicação</p>
+                </div>
+            </div>
+
+            <div class="footer-divider"></div>
+
+            <div class="footer-team">
+                <p class="team-label">Equipe</p>
+                <div class="team-members">
+                    <div class="team-member">
+                        <div class="member-avatar" style="--avatar-hue: 260;">RV</div>
+                        <div class="member-info">
+                            <span class="member-name">Rafael Viktor S. Pereira</span>
+                            <span class="member-role">Desenvolvedor</span>
+                        </div>
+                    </div>
+                    <div class="team-member">
+                        <div class="member-avatar" style="--avatar-hue: 200;">RC</div>
+                        <div class="member-info">
+                            <span class="member-name">Reginaldo C. dos Santos</span>
+                            <span class="member-role">Desenvolvedor</span>
+                        </div>
+                    </div>
+                    <div class="team-member">
+                        <div class="member-avatar" style="--avatar-hue: 160;">KG</div>
+                        <div class="member-info">
+                            <span class="member-name">Keven Gabriel M. M. Sousa</span>
+                            <span class="member-role">Desenvolvedor</span>
+                        </div>
+                    </div>
+                    <div class="team-member chief">
+                        <div class="member-avatar chief-avatar" style="--avatar-hue: 40;">AJ</div>
+                        <div class="member-info">
+                            <span class="member-name">Adão Jairo S. Porto</span>
+                            <span class="member-role chief-role">Chefe de Departamento</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>FAPEMIG PDFs &copy; 2026 — Todos os direitos reservados</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Container de Toasts -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Overlay de Progresso -->
+    <div class="progress-overlay" id="progressOverlay" style="display:none">
+        <div class="progress-card">
+            <svg class="progress-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="10" y="6" width="28" height="38" rx="3" opacity="0.3"/>
+                <rect x="18" y="14" width="28" height="38" rx="3" opacity="0.5"/>
+                <rect x="26" y="20" width="28" height="38" rx="3" fill="rgba(139,92,246,0.1)"/>
+                <path d="M34 34h12M34 40h12M34 46h8" stroke-width="1.5" opacity="0.6"/>
+            </svg>
+            <h3>Compilando seus PDFs...</h3>
+            <p class="progress-subtitle">Isso pode levar alguns segundos</p>
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/sortable.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
