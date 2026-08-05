@@ -1,5 +1,5 @@
 // ============================================================
-// FAPEMIG PDFs — Lógica Principal do Frontend
+// FAPEMIG PDFs — Lógica Principal do Frontend (Otimizado)
 // ============================================================
 
 const state = {
@@ -13,7 +13,8 @@ const state = {
     color: [0, 0, 0],
     margin: 30,
     facingPages: false
-  }
+  },
+  isUploading: false
 };
 
 // ============================================================
@@ -51,6 +52,7 @@ let sortableInstance = null;
 
 function initSortable() {
   if (typeof Sortable !== 'undefined') {
+    if (sortableInstance) sortableInstance.destroy();
     sortableInstance = new Sortable(pdfGrid, {
       animation: 200,
       handle: '.drag-handle',
@@ -58,7 +60,6 @@ function initSortable() {
       dragClass: 'sortable-drag',
       easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
       onEnd: () => {
-        // Atualizar o estado baseado na nova ordem do DOM
         const cardIds = Array.from(pdfGrid.children).map(card => card.dataset.id);
         const reordered = [];
         cardIds.forEach(id => {
@@ -69,19 +70,19 @@ function initSortable() {
         updateOrderBadges();
       }
     });
-  } else {
-    console.warn('SortableJS não foi carregado. Reordenação por drag & drop indisponível.');
   }
 }
 
 // ============================================================
-// Upload
+// Upload — Individual com progresso
 // ============================================================
-uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('click', () => {
+  if (!state.isUploading) fileInput.click();
+});
 
 uploadZone.addEventListener('dragover', (e) => {
   e.preventDefault();
-  uploadZone.classList.add('dragover');
+  if (!state.isUploading) uploadZone.classList.add('dragover');
 });
 
 uploadZone.addEventListener('dragleave', () => {
@@ -91,67 +92,162 @@ uploadZone.addEventListener('dragleave', () => {
 uploadZone.addEventListener('drop', (e) => {
   e.preventDefault();
   uploadZone.classList.remove('dragover');
+  if (state.isUploading) return;
   const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
   if (files.length > 0) {
-    uploadFiles(files);
+    uploadFilesSequentially(files);
   } else {
     showToast('Por favor, selecione apenas arquivos PDF.', 'error');
   }
 });
 
 fileInput.addEventListener('change', (e) => {
-  if (e.target.files.length) {
-    uploadFiles(Array.from(e.target.files));
+  if (e.target.files.length && !state.isUploading) {
+    uploadFilesSequentially(Array.from(e.target.files));
   }
   fileInput.value = '';
 });
 
-async function uploadFiles(fileList) {
-  const formData = new FormData();
-  fileList.forEach(file => formData.append('files', file));
-
-  // Mostrar loading na upload zone
+/**
+ * Upload otimizado: envia um arquivo por vez para feedback imediato.
+ * Cada arquivo aparece na tela assim que é processado.
+ */
+async function uploadFilesSequentially(fileList) {
+  state.isUploading = true;
   uploadZone.classList.add('uploading');
-  const originalContent = uploadZone.querySelector('h2').textContent;
-  uploadZone.querySelector('h2').textContent = 'Enviando...';
 
-  try {
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData
-    });
+  const totalFiles = fileList.length;
+  let successCount = 0;
+  let errorCount = 0;
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Erro no upload');
-    }
+  // Mostrar progresso no upload zone
+  const h2 = uploadZone.querySelector('h2');
+  const p = uploadZone.querySelector('p');
+  const originalH2 = h2.textContent;
+  const originalP = p.textContent;
 
-    const results = await response.json();
+  for (let i = 0; i < fileList.length; i++) {
+    const file = fileList[i];
 
-    results.forEach(file => {
-      state.files.push({
-        id: file.id,
-        name: file.name,
-        pages: file.pages,
-        thumbnail: file.thumbnail
+    // Atualizar texto de progresso
+    h2.textContent = `Processando ${i + 1} de ${totalFiles}...`;
+    p.textContent = truncateFilename(file.name, 40);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/upload-single', {
+        method: 'POST',
+        body: formData
       });
-    });
 
-    renderGrid();
-    showToast(`${results.length} arquivo(s) adicionado(s) com sucesso!`, 'success');
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Erro no upload');
+      }
 
-  } catch (error) {
-    console.error('Erro no upload:', error);
-    showToast(`Erro ao enviar arquivo(s): ${error.message}`, 'error');
-  } finally {
-    uploadZone.classList.remove('uploading');
-    uploadZone.querySelector('h2').textContent = originalContent;
+      const result = await response.json();
+
+      state.files.push({
+        id: result.id,
+        name: result.name,
+        pages: result.pages,
+        thumbnail: result.thumbnail
+      });
+
+      // Renderizar card imediatamente (sem re-renderizar tudo)
+      appendCard(state.files[state.files.length - 1], state.files.length - 1);
+      updateFileInfo();
+      successCount++;
+
+    } catch (error) {
+      console.error(`Erro ao enviar ${file.name}:`, error);
+      errorCount++;
+    }
+  }
+
+  // Restaurar upload zone
+  h2.textContent = originalH2;
+  p.textContent = originalP;
+  uploadZone.classList.remove('uploading');
+  state.isUploading = false;
+
+  // Inicializar SortableJS se ainda não foi
+  if (state.files.length > 0 && !sortableInstance) {
+    initSortable();
+  }
+
+  // Feedback
+  if (successCount > 0) {
+    showToast(`${successCount} arquivo${successCount > 1 ? 's' : ''} adicionado${successCount > 1 ? 's' : ''} com sucesso!`, 'success');
+  }
+  if (errorCount > 0) {
+    showToast(`${errorCount} arquivo${errorCount > 1 ? 's' : ''} falhou${errorCount > 1 ? 'aram' : ''}.`, 'error');
   }
 }
 
 // ============================================================
-// Renderização do Grid
+// Renderização — Otimizada (append incremental)
 // ============================================================
+
+/** Adiciona UM card sem re-renderizar todo o grid */
+function appendCard(file, index) {
+  // Mostrar grid e esconder empty state
+  emptyState.style.display = 'none';
+  pdfGrid.style.display = 'grid';
+  mergeSection.style.display = 'block';
+
+  const card = createCardElement(file, index);
+  pdfGrid.appendChild(card);
+}
+
+/** Cria o elemento DOM de um card */
+function createCardElement(file, index) {
+  const card = document.createElement('div');
+  card.className = 'pdf-card';
+  card.dataset.id = file.id;
+
+  const thumbnailHTML = file.thumbnail
+    ? `<img src="${file.thumbnail}" alt="${file.name}" class="thumbnail-img" loading="lazy" />`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+         <polyline points="14 2 14 8 20 8"></polyline>
+       </svg>`;
+
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="order-badge">${index + 1}</div>
+      <div class="card-actions">
+        <button class="icon-btn drag-handle" title="Arrastar para reordenar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <button class="icon-btn remove" data-id="${file.id}" title="Remover">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="thumbnail-container">
+      ${thumbnailHTML}
+    </div>
+    <div class="card-info">
+      <span class="filename" title="${file.name}">${truncateFilename(file.name, 28)}</span>
+      <span class="page-count">${file.pages} página${file.pages !== 1 ? 's' : ''}</span>
+    </div>
+  `;
+
+  card.querySelector('.remove').addEventListener('click', () => removeFile(file.id));
+  return card;
+}
+
+/** Re-renderiza todo o grid (usado após remoção) */
 function renderGrid() {
   if (state.files.length === 0) {
     emptyState.style.display = 'block';
@@ -167,65 +263,24 @@ function renderGrid() {
   mergeSection.style.display = 'block';
 
   pdfGrid.innerHTML = '';
-  let totalPages = 0;
-
   state.files.forEach((file, index) => {
-    totalPages += file.pages;
-    const card = document.createElement('div');
-    card.className = 'pdf-card';
-    card.dataset.id = file.id;
-    card.style.animationDelay = `${index * 0.05}s`;
-
-    // Thumbnail: usar imagem real do backend ou placeholder
-    const thumbnailHTML = file.thumbnail
-      ? `<img src="${file.thumbnail}" alt="${file.name}" class="thumbnail-img" />`
-      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-           <polyline points="14 2 14 8 20 8"></polyline>
-           <line x1="16" y1="13" x2="8" y2="13"></line>
-           <line x1="16" y1="17" x2="8" y2="17"></line>
-         </svg>`;
-
-    card.innerHTML = `
-      <div class="card-header">
-        <div class="order-badge">${index + 1}</div>
-        <div class="card-actions">
-          <button class="icon-btn drag-handle" title="Arrastar para reordenar">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="3" y1="12" x2="21" y2="12"></line>
-              <line x1="3" y1="6" x2="21" y2="6"></line>
-              <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-          </button>
-          <button class="icon-btn remove" data-id="${file.id}" title="Remover">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-      </div>
-      <div class="thumbnail-container">
-        ${thumbnailHTML}
-      </div>
-      <div class="card-info">
-        <span class="filename" title="${file.name}">${truncateFilename(file.name, 28)}</span>
-        <span class="page-count">${file.pages} página${file.pages !== 1 ? 's' : ''}</span>
-      </div>
-    `;
-
-    // Botão de remover
-    card.querySelector('.remove').addEventListener('click', () => removeFile(file.id));
-
+    const card = createCardElement(file, index);
     pdfGrid.appendChild(card);
   });
 
+  updateFileInfo();
+  initSortable();
+}
+
+function updateFileInfo() {
+  if (state.files.length === 0) {
+    fileInfo.style.display = 'none';
+    return;
+  }
+  fileInfo.style.display = 'flex';
+  const totalPages = state.files.reduce((sum, f) => sum + f.pages, 0);
   fileCountEl.textContent = `${state.files.length} arquivo${state.files.length !== 1 ? 's' : ''}`;
   totalPagesEl.textContent = `${totalPages} página${totalPages !== 1 ? 's' : ''}`;
-
-  if (!sortableInstance) {
-    initSortable();
-  }
 }
 
 function updateOrderBadges() {
@@ -296,9 +351,6 @@ function showToast(message, type = 'success') {
 // ============================================================
 // Painel de Numeração
 // ============================================================
-
-// Mapeamento de posições: frontend → backend
-// O backend espera: top-left, top-center, top-right, middle-left, middle-center, middle-right, bottom-left, bottom-center, bottom-right
 const POSITION_MAP = {
   'top-left': 'top-left',
   'top-center': 'top-center',
@@ -320,15 +372,9 @@ numberingToggle.addEventListener('change', (e) => {
   }
 });
 
-// Inicializar botões de posição
 posButtons.forEach(btn => {
   const pos = btn.dataset.position;
-
-  // Marcar posição padrão
-  if (pos === state.numbering.position) {
-    btn.classList.add('active');
-  }
-
+  if (pos === state.numbering.position) btn.classList.add('active');
   btn.addEventListener('click', () => {
     posButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -336,9 +382,7 @@ posButtons.forEach(btn => {
   });
 });
 
-numberFormat.addEventListener('change', (e) => {
-  state.numbering.format = e.target.value;
-});
+numberFormat.addEventListener('change', (e) => state.numbering.format = e.target.value);
 
 fontSizeInput.addEventListener('input', (e) => {
   fontSizeValue.textContent = e.target.value;
@@ -375,7 +419,6 @@ mergeButton.addEventListener('click', async () => {
   const textSpan = mergeButton.querySelector('.merge-text');
   const loader = mergeButton.querySelector('.merge-loader');
 
-  // Ativar estado de loading
   textSpan.style.display = 'none';
   loader.style.display = 'block';
   mergeButton.disabled = true;
@@ -384,15 +427,13 @@ mergeButton.addEventListener('click', async () => {
   const fill = progressOverlay.querySelector('.progress-fill');
   let progress = 0;
 
-  // Animação de progresso
   const progressInterval = setInterval(() => {
-    progress += Math.random() * 12;
+    progress += Math.random() * 8;
     if (progress > 90) progress = 90;
     fill.style.width = `${progress}%`;
-  }, 200);
+  }, 300);
 
   try {
-    // Construir payload para a API
     const payload = {
       files: state.files.map(f => f.id),
       numbering: {
@@ -418,13 +459,12 @@ mergeButton.addEventListener('click', async () => {
       throw new Error(err.error || 'Erro ao compilar PDFs');
     }
 
-    // Receber o PDF como blob e disparar download
     const blob = await response.blob();
 
     clearInterval(progressInterval);
     fill.style.width = '100%';
 
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 400));
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
