@@ -280,8 +280,31 @@ def delete_all_files():
     return jsonify({"success": True})
 
 def open_browser():
-    """Abre o navegador após um pequeno atraso para dar tempo ao servidor iniciar."""
-    webbrowser.open('http://localhost:5000')
+    """Abre o navegador em modo app (sem barra de URL), similar ao WhatsApp Web desktop."""
+    import subprocess
+    url = 'http://localhost:5000'
+
+    # Caminhos comuns do Chrome e Edge no Windows
+    browsers = [
+        # Google Chrome
+        os.path.join(os.environ.get('PROGRAMFILES', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        # Microsoft Edge
+        os.path.join(os.environ.get('PROGRAMFILES', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    ]
+
+    for browser_path in browsers:
+        if os.path.exists(browser_path):
+            try:
+                subprocess.Popen([browser_path, f'--app={url}', '--new-window'])
+                return
+            except Exception:
+                continue
+
+    # Fallback: abrir no navegador padrão (com barra de URL)
+    webbrowser.open(url)
 
 if __name__ == '__main__':
     Timer(1.5, open_browser).start()

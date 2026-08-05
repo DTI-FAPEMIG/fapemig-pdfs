@@ -28,17 +28,22 @@ if errorlevel 1 (
 )
 
 :: Verificar dependencias
-echo [1/3] Verificando dependencias...
+echo [1/4] Verificando dependencias...
 pip install flask PyMuPDF >nul 2>&1
 
+:: Encerrar FAPEMIG_PDFs.exe se estiver rodando
+echo [2/4] Encerrando instancias anteriores...
+taskkill /F /IM "FAPEMIG_PDFs.exe" >nul 2>&1
+timeout /t 2 /nobreak >nul
+
 :: Limpar build anterior
-echo [2/3] Limpando build anterior...
+echo [3/4] Limpando build anterior...
 if exist "dist" rmdir /s /q "dist"
 if exist "build" rmdir /s /q "build"
 if exist "FAPEMIG_PDFs.spec" del "FAPEMIG_PDFs.spec"
 
 :: Gerar executavel
-echo [3/3] Gerando executavel...
+echo [4/4] Gerando executavel...
 echo.
 
 pyinstaller ^
@@ -46,12 +51,13 @@ pyinstaller ^
     --onefile ^
     --windowed ^
     --name "FAPEMIG_PDFs" ^
+    --icon "icon.ico" ^
     --add-data "templates;templates" ^
     --add-data "static;static" ^
     app.py
 
 echo.
-if exist "dist\FAPEMIG_PDFs.exe" (
+if %ERRORLEVEL% EQU 0 (
     echo ============================================
     echo   BUILD CONCLUIDO COM SUCESSO!
     echo   Executavel: dist\FAPEMIG_PDFs.exe
