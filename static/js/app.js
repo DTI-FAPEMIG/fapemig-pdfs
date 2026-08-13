@@ -1,9 +1,9 @@
 // ============================================================
-// FAPEMIG PDFs — Lógica Principal do Frontend (Otimizado)
+// FAPEMIG PDFs — Lógica Principal do Frontend (v3 - Otimizado)
 // ============================================================
 
 const state = {
-  files: [], // { id, name, pages, thumbnail }
+  files: [],
   numbering: {
     enabled: false,
     position: 'bottom-center',
@@ -11,8 +11,13 @@ const state = {
     startPage: 1,
     fontSize: 12,
     color: [0, 0, 0],
-    margin: 30,
+    marginX: 30,
+    marginY: 30,
     facingPages: false
+  },
+  split: {
+    enabled: false,
+    maxSizeMb: 17
   },
   isUploading: false
 };
@@ -31,19 +36,28 @@ const mergeSection = document.getElementById('mergeSection');
 const mergeButton = document.getElementById('mergeButton');
 const toastContainer = document.getElementById('toastContainer');
 const progressOverlay = document.getElementById('progressOverlay');
+const clearAllBtn = document.getElementById('clearAllBtn');
 
-// Elementos de numeração
+// Numeração
 const numberingToggle = document.getElementById('numberingToggle');
 const numberingOptions = document.getElementById('numberingOptions');
 const posButtons = document.querySelectorAll('.page-preview button');
 const numberFormat = document.getElementById('numberFormat');
 const fontSizeInput = document.getElementById('fontSize');
 const fontSizeValue = document.getElementById('fontSizeValue');
-const colorButtons = document.querySelectorAll('.color-pills button');
-const marginInput = document.getElementById('margin');
-const marginValue = document.getElementById('marginValue');
+const colorPicker = document.getElementById('colorPicker');
+const colorSwatches = document.querySelectorAll('.color-swatch');
+const marginXInput = document.getElementById('marginX');
+const marginXValue = document.getElementById('marginXValue');
+const marginYInput = document.getElementById('marginY');
+const marginYValue = document.getElementById('marginYValue');
 const startPageInput = document.getElementById('startPage');
 const facingPagesInput = document.getElementById('facingPages');
+
+// Fracionamento
+const splitToggle = document.getElementById('splitToggle');
+const splitOptions = document.getElementById('splitOptions');
+const maxSizeMbInput = document.getElementById('maxSizeMb');
 
 // ============================================================
 // SortableJS
@@ -74,7 +88,7 @@ function initSortable() {
 }
 
 // ============================================================
-// Upload — Individual com progresso
+// Upload
 // ============================================================
 uploadZone.addEventListener('click', () => {
   if (!state.isUploading) fileInput.click();
@@ -108,10 +122,6 @@ fileInput.addEventListener('change', (e) => {
   fileInput.value = '';
 });
 
-/**
- * Upload otimizado: envia um arquivo por vez para feedback imediato.
- * Cada arquivo aparece na tela assim que é processado.
- */
 async function uploadFilesSequentially(fileList) {
   state.isUploading = true;
   uploadZone.classList.add('uploading');
@@ -120,7 +130,6 @@ async function uploadFilesSequentially(fileList) {
   let successCount = 0;
   let errorCount = 0;
 
-  // Mostrar progresso no upload zone
   const h2 = uploadZone.querySelector('h2');
   const p = uploadZone.querySelector('p');
   const originalH2 = h2.textContent;
@@ -128,8 +137,6 @@ async function uploadFilesSequentially(fileList) {
 
   for (let i = 0; i < fileList.length; i++) {
     const file = fileList[i];
-
-    // Atualizar texto de progresso
     h2.textContent = `Processando ${i + 1} de ${totalFiles}...`;
     p.textContent = truncateFilename(file.name, 40);
 
@@ -148,7 +155,6 @@ async function uploadFilesSequentially(fileList) {
       }
 
       const result = await response.json();
-
       state.files.push({
         id: result.id,
         name: result.name,
@@ -156,44 +162,35 @@ async function uploadFilesSequentially(fileList) {
         thumbnail: result.thumbnail
       });
 
-      // Renderizar card imediatamente (sem re-renderizar tudo)
       appendCard(state.files[state.files.length - 1], state.files.length - 1);
       updateFileInfo();
       successCount++;
-
     } catch (error) {
       console.error(`Erro ao enviar ${file.name}:`, error);
       errorCount++;
     }
   }
 
-  // Restaurar upload zone
   h2.textContent = originalH2;
   p.textContent = originalP;
   uploadZone.classList.remove('uploading');
   state.isUploading = false;
 
-  // Inicializar SortableJS se ainda não foi
-  if (state.files.length > 0 && !sortableInstance) {
-    initSortable();
-  }
+  if (state.files.length > 0 && !sortableInstance) initSortable();
 
-  // Feedback
   if (successCount > 0) {
     showToast(`${successCount} arquivo${successCount > 1 ? 's' : ''} adicionado${successCount > 1 ? 's' : ''} com sucesso!`, 'success');
   }
   if (errorCount > 0) {
-    showToast(`${errorCount} arquivo${errorCount > 1 ? 's' : ''} falhou${errorCount > 1 ? 'aram' : ''}.`, 'error');
+    showToast(`${errorCount} arquivo${errorCount > 1 ? 's falharam' : ' falhou'}.`, 'error');
   }
 }
 
 // ============================================================
-// Renderização — Otimizada (append incremental)
+// Renderização
 // ============================================================
 
-/** Adiciona UM card sem re-renderizar todo o grid */
 function appendCard(file, index) {
-  // Mostrar grid e esconder empty state
   emptyState.style.display = 'none';
   pdfGrid.style.display = 'grid';
   mergeSection.style.display = 'block';
@@ -202,7 +199,6 @@ function appendCard(file, index) {
   pdfGrid.appendChild(card);
 }
 
-/** Cria o elemento DOM de um card */
 function createCardElement(file, index) {
   const card = document.createElement('div');
   card.className = 'pdf-card';
@@ -218,21 +214,12 @@ function createCardElement(file, index) {
   card.innerHTML = `
     <div class="card-header">
       <div class="order-badge">${index + 1}</div>
-      <div class="card-actions">
-        <button class="icon-btn drag-handle" title="Arrastar para reordenar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="3" y1="12" x2="21" y2="12"></line>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <line x1="3" y1="18" x2="21" y2="18"></line>
-          </svg>
-        </button>
-        <button class="icon-btn remove" data-id="${file.id}" title="Remover">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
+      <button class="icon-btn remove" data-id="${file.id}" title="Remover">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
     </div>
     <div class="thumbnail-container">
       ${thumbnailHTML}
@@ -241,13 +228,19 @@ function createCardElement(file, index) {
       <span class="filename" title="${file.name}">${truncateFilename(file.name, 28)}</span>
       <span class="page-count">${file.pages} página${file.pages !== 1 ? 's' : ''}</span>
     </div>
+    <button class="icon-btn drag-handle" title="Arrastar para reordenar">
+      <svg width="28" height="16" viewBox="0 0 28 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="4" y1="4" x2="24" y2="4"></line>
+        <line x1="4" y1="8" x2="24" y2="8"></line>
+        <line x1="4" y1="12" x2="24" y2="12"></line>
+      </svg>
+    </button>
   `;
 
   card.querySelector('.remove').addEventListener('click', () => removeFile(file.id));
   return card;
 }
 
-/** Re-renderiza todo o grid (usado após remoção) */
 function renderGrid() {
   if (state.files.length === 0) {
     emptyState.style.display = 'block';
@@ -264,8 +257,7 @@ function renderGrid() {
 
   pdfGrid.innerHTML = '';
   state.files.forEach((file, index) => {
-    const card = createCardElement(file, index);
-    pdfGrid.appendChild(card);
+    pdfGrid.appendChild(createCardElement(file, index));
   });
 
   updateFileInfo();
@@ -284,10 +276,7 @@ function updateFileInfo() {
 }
 
 function updateOrderBadges() {
-  const badges = pdfGrid.querySelectorAll('.order-badge');
-  badges.forEach((badge, index) => {
-    badge.textContent = index + 1;
-  });
+  pdfGrid.querySelectorAll('.order-badge').forEach((badge, i) => badge.textContent = i + 1);
 }
 
 async function removeFile(id) {
@@ -297,18 +286,35 @@ async function removeFile(id) {
     card.style.opacity = '0';
     card.style.transition = 'all 0.3s ease';
   }
-
-  try {
-    await fetch(`/api/files/${id}`, { method: 'DELETE' });
-  } catch (e) {
-    console.warn('Erro ao remover arquivo do servidor:', e);
-  }
-
+  try { await fetch(`/api/files/${id}`, { method: 'DELETE' }); } catch (e) {}
   setTimeout(() => {
     state.files = state.files.filter(f => f.id !== id);
     renderGrid();
   }, 300);
 }
+
+// ============================================================
+// Limpar Todos
+// ============================================================
+clearAllBtn.addEventListener('click', async () => {
+  if (state.files.length === 0) return;
+
+  // Animação de saída em todos os cards
+  const cards = pdfGrid.querySelectorAll('.pdf-card');
+  cards.forEach((card, i) => {
+    card.style.transition = `all 0.3s ease ${i * 0.04}s`;
+    card.style.transform = 'scale(0.8)';
+    card.style.opacity = '0';
+  });
+
+  try { await fetch('/api/files', { method: 'DELETE' }); } catch (e) {}
+
+  setTimeout(() => {
+    state.files = [];
+    renderGrid();
+    showToast('Todos os PDFs foram removidos.', 'success');
+  }, cards.length * 40 + 300);
+});
 
 // ============================================================
 // Utilitários
@@ -320,6 +326,13 @@ function truncateFilename(name, maxLen) {
   const truncLen = maxLen - ext.length - 4;
   if (truncLen <= 0) return name.substring(0, maxLen - 3) + '...';
   return nameOnly.substring(0, truncLen) + '...' + ext;
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return [r, g, b];
 }
 
 function showToast(message, type = 'success') {
@@ -345,40 +358,23 @@ function showToast(message, type = 'success') {
     toast.style.transform = 'translateX(100px)';
     toast.style.transition = 'all 0.3s ease';
     setTimeout(() => toast.remove(), 300);
-  }, 3500);
+  }, 4000);
 }
 
 // ============================================================
 // Painel de Numeração
 // ============================================================
-const POSITION_MAP = {
-  'top-left': 'top-left',
-  'top-center': 'top-center',
-  'top-right': 'top-right',
-  'middle-left': 'middle-left',
-  'middle-center': 'middle-center',
-  'middle-right': 'middle-right',
-  'bottom-left': 'bottom-left',
-  'bottom-center': 'bottom-center',
-  'bottom-right': 'bottom-right'
-};
-
 numberingToggle.addEventListener('change', (e) => {
   state.numbering.enabled = e.target.checked;
-  if (e.target.checked) {
-    numberingOptions.classList.add('active');
-  } else {
-    numberingOptions.classList.remove('active');
-  }
+  numberingOptions.classList.toggle('active', e.target.checked);
 });
 
 posButtons.forEach(btn => {
-  const pos = btn.dataset.position;
-  if (pos === state.numbering.position) btn.classList.add('active');
+  if (btn.dataset.position === state.numbering.position) btn.classList.add('active');
   btn.addEventListener('click', () => {
     posButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    state.numbering.position = pos;
+    state.numbering.position = btn.dataset.position;
   });
 });
 
@@ -389,17 +385,37 @@ fontSizeInput.addEventListener('input', (e) => {
   state.numbering.fontSize = parseInt(e.target.value);
 });
 
-colorButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    colorButtons.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.numbering.color = btn.dataset.color.split(',').map(Number);
+// Cor: picker + swatches
+colorPicker.addEventListener('input', (e) => {
+  state.numbering.color = hexToRgb(e.target.value);
+  colorSwatches.forEach(s => s.classList.remove('active'));
+  // Ativar swatch correspondente se existir
+  colorSwatches.forEach(s => {
+    if (s.dataset.hex.toUpperCase() === e.target.value.toUpperCase()) {
+      s.classList.add('active');
+    }
   });
 });
 
-marginInput.addEventListener('input', (e) => {
-  marginValue.textContent = e.target.value;
-  state.numbering.margin = parseInt(e.target.value);
+colorSwatches.forEach(swatch => {
+  swatch.addEventListener('click', () => {
+    const hex = swatch.dataset.hex;
+    colorPicker.value = hex;
+    state.numbering.color = hexToRgb(hex);
+    colorSwatches.forEach(s => s.classList.remove('active'));
+    swatch.classList.add('active');
+  });
+});
+
+// Margens X/Y
+marginXInput.addEventListener('input', (e) => {
+  marginXValue.textContent = e.target.value;
+  state.numbering.marginX = parseInt(e.target.value);
+});
+
+marginYInput.addEventListener('input', (e) => {
+  marginYValue.textContent = e.target.value;
+  state.numbering.marginY = parseInt(e.target.value);
 });
 
 startPageInput.addEventListener('input', (e) => {
@@ -408,6 +424,18 @@ startPageInput.addEventListener('input', (e) => {
 
 facingPagesInput.addEventListener('change', (e) => {
   state.numbering.facingPages = e.target.checked;
+});
+
+// ============================================================
+// Fracionamento
+// ============================================================
+splitToggle.addEventListener('change', (e) => {
+  state.split.enabled = e.target.checked;
+  splitOptions.classList.toggle('active', e.target.checked);
+});
+
+maxSizeMbInput.addEventListener('input', (e) => {
+  state.split.maxSizeMb = parseFloat(e.target.value) || 17;
 });
 
 // ============================================================
@@ -428,23 +456,28 @@ mergeButton.addEventListener('click', async () => {
   let progress = 0;
 
   const progressInterval = setInterval(() => {
-    progress += Math.random() * 8;
+    progress += Math.random() * 6;
     if (progress > 90) progress = 90;
     fill.style.width = `${progress}%`;
-  }, 300);
+  }, 400);
 
   try {
     const payload = {
       files: state.files.map(f => f.id),
       numbering: {
         enabled: state.numbering.enabled,
-        position: POSITION_MAP[state.numbering.position] || state.numbering.position,
+        position: state.numbering.position,
         format: state.numbering.format,
         start_page: state.numbering.startPage,
         font_size: state.numbering.fontSize,
         color: state.numbering.color,
-        margin: state.numbering.margin,
+        margin_x: state.numbering.marginX,
+        margin_y: state.numbering.marginY,
         facing_pages: state.numbering.facingPages
+      },
+      split: {
+        enabled: state.split.enabled,
+        max_size_mb: state.split.maxSizeMb
       }
     };
 
@@ -459,23 +492,32 @@ mergeButton.addEventListener('click', async () => {
       throw new Error(err.error || 'Erro ao compilar PDFs');
     }
 
-    const blob = await response.blob();
-
     clearInterval(progressInterval);
     fill.style.width = '100%';
-
     await new Promise(r => setTimeout(r, 400));
+
+    const blob = await response.blob();
+    const contentType = response.headers.get('Content-Type') || '';
+    const contentDisp = response.headers.get('Content-Disposition') || '';
+
+    // Determinar se é ZIP (múltiplas partes) ou PDF único
+    const isZip = contentType.includes('zip') || contentDisp.includes('.zip');
+    const filename = isZip ? 'FAPEMIG_PDFs_compilado.zip' : 'FAPEMIG_PDFs_compilado.pdf';
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'FAPEMIG_PDFs_compilado.pdf';
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showToast('PDFs compilados com sucesso! Download iniciado.', 'success');
+    if (isZip) {
+      showToast('PDFs fracionados com sucesso! Download do ZIP iniciado.', 'success');
+    } else {
+      showToast('PDFs compilados com sucesso! Download iniciado.', 'success');
+    }
 
   } catch (error) {
     clearInterval(progressInterval);

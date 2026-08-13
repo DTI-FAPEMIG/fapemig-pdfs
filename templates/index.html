@@ -66,9 +66,18 @@
 
                 <!-- Informações dos arquivos -->
                 <div class="file-info" id="fileInfo" style="display:none">
-                    <span id="fileCount">0 arquivos</span>
-                    <span class="file-info-separator">•</span>
-                    <span id="totalPages">0 páginas</span>
+                    <div class="file-info-stats">
+                        <span id="fileCount">0 arquivos</span>
+                        <span class="file-info-separator">•</span>
+                        <span id="totalPages">0 páginas</span>
+                    </div>
+                    <button class="clear-all-btn" id="clearAllBtn" title="Remover todos os PDFs">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                        Limpar todos
+                    </button>
                 </div>
             </section>
 
@@ -132,17 +141,31 @@
                     <!-- Cor -->
                     <div class="setting-group">
                         <label>Cor do número</label>
-                        <div class="color-pills">
-                            <button data-color="0,0,0" class="active">Preto</button>
-                            <button data-color="128,128,128">Cinza</button>
-                            <button data-color="255,255,255">Branco</button>
+                        <div class="color-picker-row">
+                            <input type="color" id="colorPicker" value="#000000" title="Escolher cor">
+                            <div class="color-presets">
+                                <button class="color-swatch active" data-hex="#000000" title="Preto" style="background:#000000"></button>
+                                <button class="color-swatch" data-hex="#333333" title="Cinza escuro" style="background:#333333"></button>
+                                <button class="color-swatch" data-hex="#666666" title="Cinza" style="background:#666666"></button>
+                                <button class="color-swatch" data-hex="#999999" title="Cinza claro" style="background:#999999"></button>
+                                <button class="color-swatch" data-hex="#FFFFFF" title="Branco" style="background:#FFFFFF"></button>
+                                <button class="color-swatch" data-hex="#1a1a8a" title="Azul escuro" style="background:#1a1a8a"></button>
+                                <button class="color-swatch" data-hex="#8B0000" title="Vermelho escuro" style="background:#8B0000"></button>
+                                <button class="color-swatch" data-hex="#006400" title="Verde escuro" style="background:#006400"></button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Margem -->
+                    <!-- Margem Horizontal -->
                     <div class="setting-group">
-                        <label>Margem: <span id="marginValue">30</span>px</label>
-                        <input type="range" id="margin" min="10" max="60" value="30">
+                        <label>Margem horizontal (X): <span id="marginXValue">30</span>px</label>
+                        <input type="range" id="marginX" min="10" max="100" value="30">
+                    </div>
+
+                    <!-- Margem Vertical -->
+                    <div class="setting-group">
+                        <label>Margem vertical (Y): <span id="marginYValue">30</span>px</label>
+                        <input type="range" id="marginY" min="10" max="100" value="30">
                     </div>
 
                     <!-- Página Inicial -->
@@ -161,6 +184,41 @@
                             </label>
                         </label>
                         <p class="setting-hint">Espelha a posição em páginas pares para impressão frente e verso</p>
+                    </div>
+                </div>
+
+                <!-- Separador -->
+                <div class="panel-divider"></div>
+
+                <!-- Fracionamento de PDF -->
+                <h2>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="12" x2="12" y2="18" stroke-dasharray="2 2"/>
+                    </svg>
+                    Fracionamento
+                </h2>
+
+                <div class="setting-group">
+                    <label class="toggle-label">
+                        <span>Fracionar PDF por tamanho</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="splitToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </label>
+                    <p class="setting-hint">Divide o PDF compilado em partes menores, útil para plataformas com limite de upload</p>
+                </div>
+
+                <div class="split-options" id="splitOptions">
+                    <div class="setting-group">
+                        <label>Tamanho máximo por parte</label>
+                        <div class="size-input-row">
+                            <input type="number" id="maxSizeMb" value="17" min="1" max="100" step="0.5">
+                            <span class="size-unit">MB</span>
+                        </div>
+                        <p class="setting-hint">Cada parte terá no máximo esse tamanho. PDFs serão divididos página a página se necessário.</p>
                     </div>
                 </div>
             </aside>
